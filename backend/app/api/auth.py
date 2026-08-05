@@ -1,8 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
+
 import os
 import httpx
 import json
+
+from app.database.session import get_db
+from app.models.user import User
 
 
 router = APIRouter()
@@ -10,6 +15,7 @@ router = APIRouter()
 
 CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+
 
 
 @router.get("/github/login")
@@ -26,11 +32,15 @@ def github_login():
 
 
 @router.get("/github/callback")
-async def github_callback(code: str):
+async def github_callback(
+    code: str,
+    db: Session = Depends(get_db)
+):
 
     async with httpx.AsyncClient() as client:
 
-        # Exchange authorization code for access token
+
+        # Exchange code for access token
         token_response = await client.post(
             "https://github.com/login/oauth/access_token",
             headers={
@@ -43,12 +53,14 @@ async def github_callback(code: str):
             }
         )
 
+
         token_data = token_response.json()
 
         access_token = token_data.get("access_token")
 
 
-        # Get user information
+
+        # Get GitHub user
         user_response = await client.get(
             "https://api.github.com/user",
             headers={
@@ -56,7 +68,38 @@ async def github_callback(code: str):
             }
         )
 
+
         user_data = user_response.json()
+
+
+
+        # Save user in database
+
+        existing_user = db.query(User).filter(
+            User.github_id == str(user_data["id"])
+        ).first()
+
+
+        if not existing_user:
+
+            new_user = User(
+                github_id=str(user_data["id"]),
+                username=user_data.get("login"),
+                name=user_data.get("name"),
+                avatar=user_data.get("avatar_url")
+            )
+
+            db.add(new_user)
+            db.commit()
+
+
+        else:
+
+            existing_user.name = user_data.get("name")
+            existing_user.avatar = user_data.get("avatar_url")
+
+            db.commit()
+
 
 
         # Get repositories
@@ -71,22 +114,31 @@ async def github_callback(code: str):
             }
         )
 
+
         repos = repos_response.json()
 
 
+
     user_info = {
+
         "username": user_data.get("login"),
+
         "name": user_data.get("name"),
+
         "avatar": user_data.get("avatar_url"),
+
         "repositories": [
+
             {
                 "name": repo["name"],
                 "url": repo["html_url"],
                 "language": repo["language"]
             }
+
             for repo in repos
         ]
     }
+
 
 
     return RedirectResponse(

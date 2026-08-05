@@ -19,3 +19,11 @@ postgres_data/
 
 # IDE
 .vscode/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Environment variables
+.env
