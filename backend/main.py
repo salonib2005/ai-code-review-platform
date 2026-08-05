@@ -1,14 +1,17 @@
 from fastapi import FastAPI
+from app.api import auth
 
-app = FastAPI(
-    title="AI Code Review Platform",
-    version="1.0.0"
+app = FastAPI()
+
+app.include_router(
+    auth.router,
+    prefix="/auth"
 )
 
 
 @app.get("/")
-def home():
+def root():
     return {
-        "status": "running",
-        "message": "AI Code Review Platform Backend 🚀"
+        "status":"running",
+        "message":"AI Code Review Platform Backend 🚀"
     }

@@ -8,9 +8,12 @@ export default function Home() {
       </p>
 
       <div className="mt-8 flex gap-4">
-        <button className="px-6 py-3 bg-black text-white rounded-lg">
+        <a
+          href="http://localhost:8000/auth/github/login"
+          className="px-6 py-3 bg-black text-white rounded-lg"
+        >
           Connect GitHub
-        </button>
+        </a>
 
         <button className="px-6 py-3 border rounded-lg">View Reviews</button>
       </div>
