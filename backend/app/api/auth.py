@@ -2,20 +2,20 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.models.repository import Repository
+from app.database.session import get_db
+from app.models.user import User
+
 import os
 import httpx
 import json
 
-from app.database.session import get_db
-from app.models.user import User
-
 
 router = APIRouter()
 
-
+password = "admin123"
 CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-
 
 
 @router.get("/github/login")
@@ -39,8 +39,6 @@ async def github_callback(
 
     async with httpx.AsyncClient() as client:
 
-
-        # Exchange code for access token
         token_response = await client.post(
             "https://github.com/login/oauth/access_token",
             headers={
@@ -53,14 +51,11 @@ async def github_callback(
             }
         )
 
-
         token_data = token_response.json()
 
         access_token = token_data.get("access_token")
 
 
-
-        # Get GitHub user
         user_response = await client.get(
             "https://api.github.com/user",
             headers={
@@ -68,12 +63,8 @@ async def github_callback(
             }
         )
 
-
         user_data = user_response.json()
 
-
-
-        # Save user in database
 
         existing_user = db.query(User).filter(
             User.github_id == str(user_data["id"])
@@ -91,6 +82,9 @@ async def github_callback(
 
             db.add(new_user)
             db.commit()
+            db.refresh(new_user)
+
+            existing_user = new_user
 
 
         else:
@@ -101,8 +95,6 @@ async def github_callback(
             db.commit()
 
 
-
-        # Get repositories
         repos_response = await client.get(
             "https://api.github.com/user/repos",
             headers={
@@ -118,29 +110,43 @@ async def github_callback(
         repos = repos_response.json()
 
 
+        for repo in repos:
 
-    user_info = {
-
-        "username": user_data.get("login"),
-
-        "name": user_data.get("name"),
-
-        "avatar": user_data.get("avatar_url"),
-
-        "repositories": [
-
-            {
-                "name": repo["name"],
-                "url": repo["html_url"],
-                "language": repo["language"]
-            }
-
-            for repo in repos
-        ]
-    }
+            existing_repo = db.query(Repository).filter(
+                Repository.url == repo["html_url"]
+            ).first()
 
 
+            if not existing_repo:
 
-    return RedirectResponse(
-        url=f"http://localhost:3000/dashboard?data={json.dumps(user_info)}"
-    )
+                new_repo = Repository(
+                    user_id=existing_user.id,
+                    name=repo["name"],
+                    url=repo["html_url"],
+                    language=repo["language"]
+                )
+
+                db.add(new_repo)
+
+
+        db.commit()
+
+
+        user_info = {
+            "username": user_data.get("login"),
+            "name": user_data.get("name"),
+            "avatar": user_data.get("avatar_url"),
+            "repositories": [
+                {
+                    "name": repo["name"],
+                    "url": repo["html_url"],
+                    "language": repo["language"]
+                }
+                for repo in repos
+            ]
+        }
+
+
+        return RedirectResponse(
+            url=f"http://localhost:3000/dashboard?data={json.dumps(user_info)}"
+        )
