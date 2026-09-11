@@ -19,6 +19,10 @@ app = FastAPI()
 def create_tables():
     Base.metadata.create_all(bind=engine)
 
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
 
 app.add_middleware(
     CORSMiddleware,
