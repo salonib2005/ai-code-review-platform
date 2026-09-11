@@ -29,3 +29,9 @@ jobs:
         working-directory: backend
         run: |
           pytest
+
+      - name: Build backend Docker image
+        run: docker build -t ai-code-review-backend ./backend
+
+      - name: Build frontend Docker image
+        run: docker build -t ai-code-review-frontend ./frontend
